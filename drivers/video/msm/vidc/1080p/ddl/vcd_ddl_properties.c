@@ -1,5 +1,4 @@
 /* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
- * Copyright (C) 2013 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -2020,7 +2019,6 @@ void ddl_set_default_dec_property(struct ddl_client_context *ddl)
 	decoder->client_frame_size.width  = VCD_DDL_TEST_DEFAULT_WIDTH;
 	decoder->client_frame_size.stride = VCD_DDL_TEST_DEFAULT_WIDTH;
 	decoder->client_frame_size.scan_lines = VCD_DDL_TEST_DEFAULT_HEIGHT;
-	decoder->client_input_buf_req.sz = 2 * 1024 * 1024;
 	decoder->progressive_only = 1;
 	decoder->idr_only_decoding = false;
 	decoder->output_order = VCD_DEC_ORDER_DISPLAY;
@@ -2226,9 +2224,8 @@ void ddl_set_default_encoder_buffer_req(struct ddl_encoder_data *encoder)
 		encoder->output_buf_req.min_count + 3;
 	encoder->output_buf_req.max_count    = DDL_MAX_BUFFER_COUNT;
 	encoder->output_buf_req.align	= DDL_LINEAR_BUFFER_ALIGN_BYTES;
-	y_cb_cr_size *= 3/2;
-	if (y_cb_cr_size > VCD_DDL_1080P_YUV_BUF_SIZE)
-		y_cb_cr_size = VCD_DDL_1080P_YUV_BUF_SIZE;
+	if (y_cb_cr_size >= VCD_DDL_720P_YUV_BUF_SIZE)
+		y_cb_cr_size = y_cb_cr_size>>1;
 	encoder->output_buf_req.sz =
 		DDL_ALIGN(y_cb_cr_size, DDL_KILO_BYTE(4));
 	ddl_set_default_encoder_metadata_buffer_size(encoder);
@@ -2275,9 +2272,10 @@ u32 ddl_set_default_decoder_buffer_req(struct ddl_decoder_data *decoder,
 			min_dpb = res_trk_get_min_dpb_count();
 			min_dpb_from_res_trk = 1;
 			if (min_dpb < decoder->min_dpb_num) {
-				DDL_MSG_INFO("Warning: cont_mode dpb count"\
+				DDL_MSG_HIGH("Warning: cont_mode dpb count"\
 					"(%u) is less than decoder min dpb count(%u)",
 					min_dpb, decoder->min_dpb_num);
+				min_dpb = decoder->min_dpb_num;
 			}
 		}
 		if ((decoder->buf_format.buffer_format ==
@@ -2300,11 +2298,8 @@ u32 ddl_set_default_decoder_buffer_req(struct ddl_decoder_data *decoder,
 		sizeof(struct vcd_buffer_requirement));
 	if (!decoder->idr_only_decoding && !min_dpb_from_res_trk)
 		output_buf_req->actual_count = min_dpb + 4;
-	else {
-		if (decoder->idr_only_decoding)
-			min_dpb = ddl_decoder_min_num_dpb(decoder);
+	else
 		output_buf_req->actual_count = min_dpb;
-	}
 	output_buf_req->min_count = min_dpb;
 	output_buf_req->max_count = DDL_MAX_BUFFER_COUNT;
 	output_buf_req->sz = y_cb_cr_size;
@@ -2329,19 +2324,10 @@ u32 ddl_set_default_decoder_buffer_req(struct ddl_decoder_data *decoder,
 	input_buf_req->min_count = 1;
 	input_buf_req->actual_count = input_buf_req->min_count + 1;
 	input_buf_req->max_count = DDL_MAX_BUFFER_COUNT;
-	if (decoder->client_input_buf_req.sz <= DDL_MEGA_BYTE(2)) {
-		input_buf_req->sz = DDL_MEGA_BYTE(2);
-	} else if (decoder->client_input_buf_req.sz <=
-					DDL_MEGA_BYTE(4)) {
-		input_buf_req->sz = DDL_MEGA_BYTE(4);
-	} else {
-		DDL_MSG_ERROR("Setting incorrect input buffer size = %d",
-			decoder->client_input_buf_req.sz);
-		return false;
-	}
+	input_buf_req->sz = (1024 * 1024 * 2);
 	input_buf_req->align = DDL_LINEAR_BUFFER_ALIGN_BYTES;
 	decoder->min_input_buf_req = *input_buf_req;
-	if (frame_height_actual) {
+	if (frame_height_actual && frame_size->height > MDP_MIN_TILE_HEIGHT) {
 		frame_size->height = frame_height_actual;
 		ddl_calculate_stride(frame_size, !decoder->progressive_only);
 	}
