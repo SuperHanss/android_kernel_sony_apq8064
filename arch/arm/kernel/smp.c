@@ -565,8 +565,7 @@ DEFINE_PER_CPU(struct pt_regs, regs_before_stop);
 static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 {
 	if (system_state == SYSTEM_BOOTING ||
-	    system_state == SYSTEM_RUNNING ||
-	    oops_in_progress) {
+	    system_state == SYSTEM_RUNNING) {
 		per_cpu(regs_before_stop, cpu) = *regs;
 		raw_spin_lock(&stop_lock);
 		printk(KERN_CRIT "CPU%u: stopping\n", cpu);
@@ -578,11 +577,8 @@ static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 
 	local_fiq_disable();
 	local_irq_disable();
-
 #ifdef CONFIG_CRASH_NOTES
-	if (system_state == SYSTEM_BOOTING ||
-	    system_state == SYSTEM_RUNNING ||
-	    oops_in_progress)
+	if (system_state == SYSTEM_BOOTING || system_state == SYSTEM_RUNNING)
 		crash_notes_save_this_cpu(CRASH_NOTE_STOPPING,
 					smp_processor_id());
 #endif
@@ -737,15 +733,9 @@ void smp_send_stop(void)
 	while (num_active_cpus() > 1 && timeout--)
 		udelay(1);
 
-	if (num_active_cpus() > 1) {
+	if (num_active_cpus() > 1)
 		pr_warning("SMP: failed to stop secondary CPUs\n");
-		if (oops_in_progress) {
-			pr_warning("SMP: falling back to watchdog\n");
-			local_irq_disable();
-			while (1)
-				cpu_relax();
-		}
-	}
+
 	smp_kill_cpus(&mask);
 }
 
